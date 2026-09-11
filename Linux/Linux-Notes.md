@@ -208,10 +208,9 @@ The prompt typically looks like this: `username@hostname:~$`
 | 45 | softlink | shortcut path |
 | 46 | `vim` | edit text file (vi, vim, nano, pico = 4 editors) |
 | 47 | `nano` | text editor |
-| 48 | `>` / `>>` | overwrite / append |
-| 49 | `whoami` | identify current user |
-| 50 | `hostname` | show machine name |
-| 51 | `uname -a` | display system information |
+| 48 | `whoami` | identify current user |
+| 49 | `hostname` | show machine name |
+| 50 | `uname -a` | display system information |
 
 ---
 
