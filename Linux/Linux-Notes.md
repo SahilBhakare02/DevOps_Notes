@@ -1399,8 +1399,6 @@ getfacl file.txt
 
 ## 25. 🚀 Interview Prep / Advanced Topics (Added)
 
-> This section is **added** content (not from the original notes) to help round out Linux/Cloud/DevOps interview preparation. Marked separately so my original notes stay untouched above.
-
 ### Frequently Asked Conceptual Differences
 
 **`top` vs `ps`**
