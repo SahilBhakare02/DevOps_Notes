@@ -705,3 +705,548 @@ Swap is not used for storing files. It acts as **extra RAM space on the disk**. 
 
 In short: ext4 and XFS are something *you* format a disk with. EFS and FSx are ready-made storage services that AWS runs and manages for you.
 >>>>>>> 9fb5f7b (AWS notes)
+
+# AWS Notes 
+### NFS/EFS, Networking, VPC, Load Balancers & Troubleshooting
+
+---
+
+## 1. NFS – Network File System
+
+### What is NFS?
+NFS (Network File System) is a way for computers to share files over a network.
+
+**Easy way to picture it:** Think of it like Google Drive or OneDrive, but for servers inside a network. You create one storage location, and multiple computers (clients) connect to it and use it as if it were their own local disk.
+
+**Key points:**
+- Centralized storage
+- Region specific
+- Attach over the network
+- Attach multiple instances
+
+**NFS server** – the machine that has the actual storage and shares it.
+**NFS client** – other machines that connect to the server and access files.
+
+The client mounts (attaches) the shared folder and can read/write files just like a normal folder.
+
+### EBS vs EFS – Storage Limit
+- **EBS** = max storage 64 TB
+- **EFS** = unlimited storage
+
+### Drawbacks of EBS
+- Connects to only a single instance
+- **Region specific:** tied to only one AZ
+- **No simultaneous sharing:** multiple servers can't share data
+- **Fixed capacity:** requires manual, upfront provisioning
+- **Container limits:** hard to share across container nodes
+- EBS is zone-locked, meaning it is restricted to just one AZ inside that region. If that specific zone fails, the EBS volume becomes unavailable, even if the rest of the region is running fine.
+
+**That's why EFS was introduced** — EFS is region-specific but distributed across the entire region (all AZs).
+
+### EFS Features
+1. **Centralized storage** – files are stored in one place, not scattered across machines
+2. **Shared access** – multiple servers can access the same data
+3. **Scalability** – add more clients without copying files everywhere
+4. **Transparency** – to the client, it looks like a normal folder/directory
+5. **Uses TCP/UDP port 2049** – default port for NFS communication
+
+### Why Do We Need NFS?
+- **Without NFS:** every server would have its own local files, making it difficult to share or sync data.
+- **With NFS:** all servers point to the same storage, making collaboration and scaling easier.
+
+**Use case:** Hosting a website on multiple servers – all servers can use the same images, code, or logs from NFS.
+
+> In AWS → **EFS (Elastic File System)** is Amazon's managed NFS service.
+
+### Versions of NFS
+- **NFSv2** – old version, basic sharing
+- **NFSv3** – supports large files, better performance
+- **NFSv4** – latest, more secure (supports encryption, ACLs)
+
+AWS EFS uses **NFSv4.1** by default.
+
+### Is NFS Region-Specific or AZ-Specific?
+- **NFS (general protocol)** – not tied to region/AZ, depends only on network reachability
+- **Amazon EFS (managed NFS):**
+  - Region-specific – an EFS file system exists only in one AWS region
+  - Multi-AZ – data is stored across multiple AZs within that region
+  - Instances in different AZs of the same region can mount the same EFS file system
+
+### Region-Specific vs Region-Isolated
+- **Region-specific:** services or resources that are tied to one geographic AWS region (e.g. US East). They can't move or scale outside that boundary natively.
+  - Example: EBS is region-specific because a volume created in Northern Virginia can't be attached to a server in Oregon.
+- **Region-isolation:** a security and fault-tolerance design principle. AWS completely separates its regions from each other so that a failure, outage, or data leak in one region can't impact or spread to another region.
+
+### EFS Lifecycle Management (Cost Optimization)
+Auto-moves old files to cheaper storage to save money. EFS Lifecycle Management automatically moves infrequently accessed files from EFS Standard storage to cheaper storage classes like EFS-IA or EFS Archive after a specified period of inactivity, helping reduce storage costs.
+
+**3 classes of Lifecycle Management in EFS:**
+1. **Transition into Standard** – if file is used daily, it stays in Standard
+2. **Transition into Infrequent Access (IA)** – if not used for the last 30 days, it automatically moves to IA
+3. **Transition into Archive** – if not used for 90 days, it automatically moves to Archive
+
+No need to do this manually.
+
+> NFS port (2049) should be allowed for EFS access.
+
+### Steps: Attaching a Filesystem (EFS) to an Instance
+1. Launch an EC2 instance
+2. Go to security – ensure port NFS (2049) is enabled
+3. In the search bar, search for EFS
+4. Create EFS
+5. Name the filesystem
+6. Select "customized"
+7. Ensure security group is same as the instance's security group
+8. Go to next step → next step again
+9. Finally, EFS (filesystem) is created
+10. Select filesystem and click on attach
+11. Copy the mounting path (temporary/permanent mounting)
+12. Connect to instance → `sudo -i`
+13. Run command: `apt update` → `apt install nfs-common` (NFS client)
+14. Paste the copied path
+15. `df -h` (filesystem is mounted on the selected path/directory)
+
+---
+
+## 2. Basic Networking
+
+Networking is the backbone of modern computing and communication systems. It involves connecting devices to share resources, data, and information efficiently.
+
+### Key Networking Components
+
+**1. IP Address (Internet Protocol Address)**
+A unique identifier assigned to each device on a network.
+- **IPv4** (e.g. `192.168.1.1`) – 32-bit address
+- **IPv6** (e.g. `2001:0db8:85a3:0000:0000:8a2e:0370:7334`) – 128-bit address
+
+**Classes of IPv4 Address (5 total classes)**
+
+| Class | 1st Octet Range | Default Subnet Mask | Network/Host | No. of Networks | Max Nodes/Network |
+|---|---|---|---|---|---|
+| A | 1–126 | 255.0.0.0 | N.H.H.H | 126 | 16,777,214 |
+| B | 128–191 | 255.255.0.0 | N.N.H.H | 16,384 | 65,534 |
+| C | 192–223 | 255.255.255.0 | N.N.N.H | 2,097,152 | 254 |
+| D | 224–239 | Scientific use | — | — | — |
+| E | 240–254 | Future use | — | — | — |
+
+**2. Subnet Mask**
+Defines the network and host portions of an IP address (which part of an IP is network and which is host).
+- Example: In IPv4, a subnet mask of `255.255.255.0` allows a total of 256 addresses, of which one is for the network and one for broadcast.
+
+**3. Subnet**
+A smaller network created from a larger network.
+
+**4. Gateway**
+A node that routes traffic from one network to another, typically connecting a private network to the internet.
+
+**5. DNS (Domain Name System)**
+Translates human-readable domain names (e.g. `www.example.com`) into IP addresses (e.g. `192.168.0.0`).
+
+**6. MAC Address (Media Access Control)**
+A hardware address that identifies a device within a local network. It is a 48-bit address.
+
+### Types of Networks
+- **LAN (Local Area Network):** small networks, typically within a single location, such as a home or office
+- **WAN (Wide Area Network):** large networks spanning geographic locations, such as the internet
+- **VLAN (Virtual Local Area Network):** logical segmentation of a LAN for better management and security
+
+### Networking Protocols
+1. **TCP/IP** (Transmission Control Protocol/Internet Protocol) – core protocol suite for communication over the internet
+2. **HTTP/HTTPS** – protocols for transferring hypertext data (webpages)
+3. **FTP** (File Transfer Protocol) – for transferring files over a network
+4. **SSH** (Secure Shell) – for secure remote administration
+
+---
+
+## 3. CIDR (Classless Inter-Domain Routing)
+
+### What is CIDR?
+CIDR tells us how many IP addresses are available in the network.
+
+**In simple words:** CIDR is just a short-hand way of writing "how big is this network." Instead of using old fixed classes (A, B, C), CIDR lets you size a network to exactly how many addresses you need — no more, no less.
+
+- CIDR is a way to define the size/range of IP addresses in a network
+- CIDR is a method for efficiently allocating IP addresses and routing data
+- It replaces the older class-based IP addressing system (Class A, B, C)
+
+**Written like:** `192.168.1.0/24`
+- `192.168.1.0` = Network address
+- `/24` = CIDR block (this tells how many bits are fixed for the network)
+- `/24` means 256 IP addresses, range = `192.168.1.0` – `192.168.1.255`
+
+CIDR range = 0–32, but usable range = 8–31.
+
+### Benefits of CIDR
+1. **Efficient IP address allocation** – prevents waste by allowing subnets of variable sizes
+2. **Improved routing efficiency** – reduces the size of routing tables by grouping multiple networks under a single prefix
+3. **Scalability** – supports hierarchical network design for better scalability
+
+### Common CIDR Values
+
+| CIDR | Total IPs |
+|---|---|
+| /32 | 1 IP |
+| /24 | 256 IPs |
+| /16 | 65,536 IPs |
+| /8 | 16 million IPs |
+
+> CIDR is important because it's used in VPCs, Subnets, Security Groups, Route Tables, and Firewalls. AWS networking completely depends on CIDR.
+
+**Rule of thumb:** Smaller CIDR number = more IPs, and bigger CIDR number = fewer IPs.
+
+---
+
+## 4. Introduction to VPC
+
+### What is VPC?
+Amazon Virtual Private Cloud (VPC) allows you to launch AWS resources in a logically isolated network that you define.
+
+**Easy way to picture it:** A VPC is like your own private section of AWS — a fenced-off area of the cloud where only your resources live, and you decide exactly how the roads (routing), gates (gateways), and fences (security groups) inside it work.
+
+You have complete control over your virtual networking environment, including selecting your own IP address range, creating subnets, and configuring route tables and gateways.
+
+### Key Features of a VPC
+1. **Logical isolation** – operates within a region, providing control over network setup
+2. **Subnets** – dividing your VPC into smaller segments based on your requirements
+3. **Security** – use security groups and network ACLs for fine-grained control
+4. **Internet gateway** – attach to a VPC for internet access
+5. **Private connectivity** – use VPN or Direct Connect to connect on-premises environments
+6. **Elastic IPs** – assign static IP addresses to resources in your VPC
+
+### Types of VPC
+1. **Default VPC** – automatically created by AWS in each region. It includes a public subnet in each availability zone, enabling immediate access to AWS services.
+2. **Custom VPC** – created manually to meet specific networking requirements, offering full control over the network configuration.
+
+> CIDR calculation for subnets – covered separately in the notebook.
+
+### Steps to Launch an EC2 Instance from VPC (Public & Private Subnet)
+
+1. First, create a VPC
+2. Create subnets (public and private subnet)
+3. Go to public subnet setting – enable public IP
+4. Create Internet Gateway (IGW) for internet access
+5. Create NAT Gateway for connecting to private subnet – availability mode = zonal, subnet = private, allocate elastic IP, create NAT gateway
+6. Attach IGW to your VPC
+7. Create 2 route tables
+8. Go to edit route for both (public and private)
+9. Add route path (separate for both)
+10. Go to actions → edit subnet association (separate for both public and private)
+11. Save changes
+12. Create EC2 instance
+13. Edit network setting → select your VPC
+14. Select public subnet (for public instance)
+15. Select private subnet (for private instance)
+16. Create new security group (at initial launch only)
+17. Then select existing security group for private instance launching
+18. Connect to instance
+19. For connecting with private instance:
+    - Go through SSH (because we can't directly access a private subnet's instance)
+    - First upload key-pair → `nano key-pair.pem`
+    - Upload key pair, save it, and exit
+    - Change permission of key-pair → `chmod 400 key-pair.pem`
+    - Run command → `ssh -i "key-pair.pem" user-name@ip-address` (use private IP here)
+    - You've successfully connected with the private subnet's instance
+
+---
+
+## 5. Internet Gateway (IGW)
+
+An Internet Gateway is a horizontally scaled, highly available, and redundant VPC component that allows communication between your VPC and the internet.
+
+An internet gateway allows resources inside a VPC to communicate with the internet.
+
+**Without IGW:**
+- No internet access
+- Can't browse websites
+- Can't SSH from your laptop to EC2
+- Can't install packages using `apt install`
+
+**AWS working flow:**
+`Internet → IGW → Route Table → Public Subnet → EC2 Instance`
+
+---
+
+## 6. NAT Gateway (Network Address Translation Gateway)
+
+NAT Gateway allows private subnet instances to access the internet, but prevents the internet from directly accessing them.
+
+**Easy way to picture it:** NAT Gateway is like a one-way mirror — your private server can look out and fetch updates from the internet, but nobody from the internet can look in and reach your private server directly.
+
+NAT gateway is used for communicating with backend, databases, etc., because we can't communicate with backend publicly. It should be private, so we use NAT gateway here.
+
+**AWS architecture:**
+`Internet → IGW → Public Subnet → NAT Gateway → Private Subnet → EC2`
+
+---
+
+## 7. VPC Peering
+
+VPC Peering is a networking connection between 2 VPCs that enables you to route traffic between them using private IP addresses.
+
+- VPC peering can only connect 2 VPCs
+- For multiple VPC connections, we use **Transit Gateway**
+
+### Steps to Connect 2 VPCs
+1. Create 2 VPCs – in different regions (VPC1 & VPC2)
+2. Create subnets for both (Subnet1 & Subnet2) → go to actions and enable public IPv4
+3. Create 2 IGWs, one for each VPC, and attach to its respective VPC (IGW1 & IGW2)
+4. Create route table for both (or use existing route table)
+5. Go to edit route → add rule and target (IGW)
+6. Go to peering connections → create peering connection
+   - Add requester = VPC1 – select region – add accepter = VPC2
+7. Launch 2 EC2 instances (one in each VPC)
+8. Go to security group of each instance → add all traffic with the other region's VPC IPv4 (for both VPCs)
+9. Again go to route table → add the other region's VPC IPv4 → target = peering connection
+10. Connect to each EC2 instance and check internet connection using the other instance's private IP
+
+---
+
+## 8. Transit Gateway
+
+AWS Transit Gateway (TGW) is a networking service that connects multiple VPCs and on-premises networks through a single central gateway.
+
+### Why Do We Need Transit Gateway?
+- **Without transit gateway:** suppose we have 4 VPCs — we need VPC peering to connect each one to every other one. This creates many connections and becomes difficult to manage.
+- **With transit gateway:** each VPC connects only to the transit gateway, instead of connecting to every other VPC individually.
+
+### Benefits
+1. Easier management
+2. Scalable architecture
+3. Centralized routing
+
+---
+
+## 9. Network Interface Controller (NIC) / ENI
+
+### NIC (Network Interface Card)
+A hardware component that allows a computer to connect with a network.
+- Example: Ethernet port, Wi-Fi card. Without a NIC, there is no internet connection.
+
+A network interface controller (NIC) in AWS is also referred to as an **Elastic Network Interface (ENI)**.
+
+### ENI (Elastic Network Interface)
+A virtual network card attached to an EC2 instance. ENI is needed to communicate with the internet, other EC2 instances, and databases. AWS attaches an ENI automatically.
+
+**ENI contains:**
+1. Private IP address – used inside VPC
+2. Public IP address (optional) – used for internet access
+3. MAC address – unique network identifier
+4. Security groups – controls who can access the EC2
+5. Elastic IP (optional) – permanent public IP
+
+### Types of ENI
+1. **Primary ENI** – created automatically when EC2 launches, cannot be detached
+2. **Secondary ENI** – additional network interface, can be attached/detached
+
+**Use case:** We use ENIs to separate traffic — for example, application traffic on ENI-1 and management traffic on ENI-2.
+
+### Key Features of NIC
+- **Primary Network Interface:** automatically created with every instance and cannot be detached
+- **Secondary Network Interface:** can be attached or detached from instances, offering flexibility in multi-network configuration
+- **Custom configuration:** security groups, IP addresses, and MAC addresses can be customized
+
+---
+
+## 10. Elastic IP (EIP)
+
+An Elastic IP is a static IPv4 address designed for dynamic cloud computing. You can associate an EIP with your instance or ENI to allow external internet access.
+
+### Key Features
+- **Static:** remains unchanged unless manually released
+- **Reassigning:** can be reassigned between instances in your account
+- **One free IP:** AWS provides one Elastic IP per account without cost, if it is associated with a running instance
+
+---
+
+## 11. Placement Groups
+
+AWS placement groups are logical groupings of instances that allow applications to meet specific performance and redundancy requirements.
+
+### Types of Placement Groups
+
+**1. Cluster Placement Group**
+- Instances are placed close together within a single Availability Zone
+- High throughput and low latency
+- Ideal for HPC (High Performance Computing) and big data workloads
+
+**2. Spread Placement Group**
+- Instances are placed across different hardware within an Availability Zone
+- Increases fault tolerance
+- Ideal for small, critical workloads
+
+**3. Partition Placement Group**
+- Instances are divided into logical partitions
+- Each partition is isolated from others
+- Used for large distributed and replicated workloads such as HDFS, HBase, and Cassandra
+
+---
+
+## 12. Security Group vs NACL
+
+Security Group is a **stateful** firewall attached to EC2 instances, while NACL is a **stateless** firewall attached to subnets that supports both allow and deny rules.
+
+### Security Group
+A virtual firewall attached to an EC2 instance. It controls traffic entering and leaving the instance.
+- Operates at the instance level
+- Example: EC2 → security group
+- **Stateful:** automatically allows responses to inbound traffic
+  - Example: Laptop → SSH request → EC2. Security group allows port 22. AWS automatically allows the return traffic — you don't need another rule. This is called "stateful."
+- Only supports allow rules
+
+### NACL (Network Access Control List)
+A firewall attached to a subnet.
+- Example: Subnet → NACL → EC2. NACL protects the entire subnet. If a subnet contains 3 EC2 instances, 1 NACL can protect all of them.
+- Acts as a firewall for controlling traffic in and out of one or more subnets
+- Operates at the subnet level
+- **Stateless:** rules need to be explicitly defined for both inbound and outbound traffic
+  - Example: NACL is stateless — suppose you allow inbound port 22, AWS does not automatically allow the response traffic. You must separately allow outbound port 22. This is called "stateless."
+- Supports rules by rule number, with allow and deny actions
+
+### Comparison
+
+| Feature | Security Group | NACL |
+|---|---|---|
+| Level | Instance level | Subnet level |
+| Acts as | Firewall | Firewall |
+| State | Stateful | Stateless |
+| Allow rules | Yes | Yes |
+| Deny rules | No | Yes |
+| Applied to | EC2 | Subnet |
+| Return traffic | Automatic | Manual rule required |
+| Complexity | Easy | More complex |
+| Default behavior | Denies all traffic by default | Allows all traffic by default |
+
+---
+
+## 13. Load Balancer
+
+### Steps to Create a Load Balancer
+1. Launch an EC2 instance
+2. Install nginx and apache2 server on it
+3. Create a target group – go to target option and click "create target"
+4. No need to configure a lot – just type the target name
+5. Select instances – select the pending instance
+6. Go to load balancer → select ALB → click "create" → type name → select AZs → click "create load balancer"
+7. Finally, after creation, copy the DNS address and paste it in the browser – you will see your web server
+
+### What is a Load Balancer?
+A load balancer in AWS is a service that automatically distributes incoming application traffic across multiple targets, such as Amazon EC2 instances, containers, and IP addresses.
+
+**Easy way to picture it:** A load balancer works like a traffic cop at a busy intersection — it makes sure no single server gets overwhelmed by directing traffic evenly (or smartly) across all available servers.
+
+It acts as a traffic cop, ensuring no single resource is overwhelmed, thereby improving application reliability. Load balancers are designed to handle varying loads of application traffic while automatically scaling up or down based on demand.
+
+> AWS offers **Elastic Load Balancing (ELB)**. By default, load balancers follow the **round-robin** algorithm.
+
+### Types of Load Balancer Algorithms (Interview Question)
+
+1. **Round Robin Algorithm** – requests are distributed one by one, equally (evenly) to all servers.
+   - Example: If 10 requests come from clients for 5 servers, each server gets 2 requests each.
+2. **Weighted Round Robin Algorithm** – some servers are stronger than others, meaning they have more capacity to handle more traffic. Requests are sent based on capacity.
+   - Example: If server 1 has more capacity, it handles 100 requests while other servers handle fewer requests.
+3. **Least Connection Algorithm** – requests go to the server having the fewest active connections. The most available server processes the request.
+   - Example: If server 1 has more connections/users/traffic and another server has less, the request goes toward the server with less traffic.
+4. **IP Hash Algorithm** – load balancer uses the client's IP address; the same user always reaches the same server. The request goes to the server where it was processed earlier.
+5. **Least Response Time Algorithm** – traffic goes to the server responding fastest.
+   - Example: EC2-1 = 50ms, EC2-2 = 10ms → request goes towards EC2-2.
+
+### Types of Load Balancers
+
+**1. ALB – Application Load Balancer (L7 LB)**
+- Works on HTTP, HTTPS protocol
+- Cannot handle millions of requests
+- Operates at the application layer (Layer 7 of the OSI model)
+- Supports advanced request routing, based on URL, hostname, query string, or headers
+- Features include WebSocket support, SSL termination, and integration with AWS Web Application Firewall (WAF)
+- Example: `amazon.com/login` → goes to login server; `amazon.com/payment` → goes to payment server
+
+**2. NLB – Network Load Balancer (L4 LB)**
+- Works on TCP, UDP & TLS traffic protocol
+- Operates at the transport layer (Layer 4 of OSI model)
+- Best for high-performance use cases that require extremely low latency
+- Provides a static IP address and preserves the source IP of the client
+
+**3. GLB – Gateway Load Balancer (L3 LB)**
+- Works on IP, routing
+- Operates at Layer 3 (network layer) of OSI model
+- Designed to deploy, scale, and manage third-party virtual appliances such as firewalls, intrusion detection, and prevention systems
+
+---
+
+## 14. OSI Model (Open System Interconnection)
+
+The Open Systems Interconnection (OSI) model is a conceptual framework created by the ISO to standardize how different computer systems communicate across a network. It divides communication into 7 distinct layers, allowing developers and network engineers to isolate, troubleshoot, and design interoperable hardware and software.
+
+### The 7 Layers (Highest to Lowest)
+
+**Upper Layers (Software-Focused)**
+- **Layer 7 – Application Layer:** The layer closest to the end-user. It allows software applications (like web browsers or email clients) to interact with the network. Examples: HTTP, FTP, SMTP.
+- **Layer 6 – Presentation Layer:** Acts as the network's translator. It formats, encrypts, and compresses data so the receiving application can correctly understand it.
+- **Layer 5 – Session Layer:** Manages communication sessions (the opening, closing, and dialogue of channels) between two devices.
+
+**Lower Layers (Hardware & Data-Focused)**
+- **Layer 4 – Transport Layer:** Ensures end-to-end delivery of data by breaking it into chunks (segments), managing flow control, and handling error recovery. Examples: TCP, UDP.
+- **Layer 3 – Network Layer:** Handles routing and logical addressing (IP addresses) to send packets across different networks. Example: Routers.
+- **Layer 2 – Data Link Layer:** Facilitates data transfer between devices on the same local network. It organizes bits into "frames" and uses MAC addresses for hardware-level identification. Example: Switches.
+- **Layer 1 – Physical Layer:** The foundational hardware layer. It transmits raw, unstructured bitstreams (0s and 1s) across a physical medium (like Ethernet cables or Wi-Fi radio waves). Examples: Hubs, cables.
+
+### ALB vs NLB Comparison
+
+| Feature | ALB | NLB |
+|---|---|---|
+| OSI Layer | Layer 7 (Application layer) | Layer 4 (Transport layer) |
+| Traffic Type | HTTP, HTTPS | TCP, UDP, TLS |
+| Routing | Content-based (URL, headers, etc.) | Connection-based |
+| Performance | Optimized for web applications | High throughput and low latency |
+| Source IP Preservation | Not preserved (uses load balancer IP) | Preserved |
+| Use Case | Web application, microservices | Gaming, real-time communication |
+| Static IP Support | No | Yes |
+| WebSocket Support | Yes | No |
+
+---
+
+## 15. Monolithic vs Microservices
+
+### Monolithic (Single Programming Language)
+Everything is one big application.
+- Example: Login – Payment – Orders – Users = one single application
+- If one module fails, the whole app may fail
+- Scaling is difficult
+
+### Microservices (Multiple Programming Languages Can Be Used)
+The application is split into small, independent services.
+- Example: Login service – Payment service – Order service – User service — each runs independently
+
+**Benefits:**
+- Easy scaling
+- Easier deployment
+- Better fault isolation
+
+---
+
+## 16. Load Balancer Troubleshooting
+
+### Why is an Instance Unhealthy? (2 Possible Reasons)
+1. Security groups are not configured properly
+2. Traffic route path may not be clear
+
+### What is Connection Draining?
+Connection draining in AWS is an Elastic Load Balancing (ELB) feature that ensures user requests already in progress are completed before an instance is taken out of service.
+
+**In simple words:** It's like closing a shop's doors for the day but still letting the customers already inside finish paying at the counter before you switch off the lights.
+
+- It allows existing connections to complete before removing an instance from service
+- It stops routing new requests to deregistering or unhealthy instances, allowing existing transactions to finish, preventing downtime or disruption
+
+---
+
+## 17. Common HTTP Error Codes (Homework)
+
+| Code | Meaning | Explanation |
+|---|---|---|
+| 404 | Not Found | The page does not exist |
+| 403 | Forbidden | Access denied — the user doesn't have permission |
+| 500 | Internal Server Error | Application problem — server received the request but the application failed |
+| 502 | Bad Gateway | Load balancer cannot communicate with the backend server. Common causes: application crashed, wrong port, service stopped |
+| 503 | Service Unavailable | No healthy servers available (all EC2 instances unhealthy) |
+| 504 | Gateway Timeout | Backend server is too slow to respond |
