@@ -181,10 +181,8 @@ SaaS is the most user-friendly and widely used cloud model. It delivers fully fu
 **Examples:** Gmail, Trello, Slack, Acumbamail, Office 365
 
 ---
----
 <img width="991" height="495" alt="image" src="https://github.com/user-attachments/assets/e1dea398-9272-43cb-be2f-d13e21a5c455" />
 
----
 ---
 
 ## Q4) What is Cloud Computing?
