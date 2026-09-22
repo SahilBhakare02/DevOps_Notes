@@ -177,9 +177,6 @@ It temporarily "shelves" your uncommitted changes so you can switch branches or 
 ### 20. What is a remote in Git?
 A remote is simply a saved link/address to a repo hosted elsewhere (usually GitHub). The default name for the main remote is usually `origin`.
 
-### 21. What is `git cherry-pick`?
-It lets you grab **one specific commit** from another branch and apply it to your current branch — without merging the whole branch. Useful when you only need one bug fix from somewhere else.
-
 ### 22. What are tags in Git, and why use them?
 Tags are like bookmarks on specific commits, usually used to mark release versions (e.g., `v1.0.0`). Unlike branches, tags don't move once created.
 
@@ -197,71 +194,11 @@ This removes the last commit but keeps your changes staged, ready to be re-commi
 - `git diff` — shows the actual line-by-line changes between files/commits.
 - `git log` — shows the history of commits (who, when, what message) but not the line-by-line content changes.
 
----
-
-## ADVANCED Notes
-
-### 26. What are Git's internal objects (blob, tree, commit)?
-Git stores data as objects, identified by a unique SHA-1 hash:
-- **Blob** — the actual content of a file.
-- **Tree** — represents a directory; it points to blobs and other trees.
-- **Commit** — a snapshot pointing to a tree, plus metadata (author, message, parent commit).
-
-Understanding this helps explain why Git is so fast and reliable — it's essentially a content-addressed filesystem, not a simple "diff tracker."
-
-### 27. What is `git rebase -i` (interactive rebase) used for?
-It lets you **rewrite commit history** before merging — you can combine (squash) multiple messy commits into one clean commit, reorder them, edit messages, or drop commits entirely. Commonly used to "clean up" a feature branch before opening a pull request.
-
-### 28. What is `git reflog`?
-It's like a **safety net** — a log of everywhere `HEAD` has pointed, even for commits that were deleted or reset away. If you accidentally lose a commit, `git reflog` can often help you recover it.
-
-### 29. What is `git bisect`?
-A debugging tool that uses **binary search** to find which commit introduced a bug. You mark a "good" commit and a "bad" commit, and Git automatically checks out commits in between, asking you "good or bad?" until it pinpoints the exact commit that broke things.
-
-### 30. What are Git hooks?
-Scripts that automatically run at certain points in the Git workflow — like right before a commit (`pre-commit`) or right after a push (`post-push`). Teams use them to enforce things like code linting, running tests, or checking commit message formats before allowing a commit/push.
-
-### 31. What is a submodule in Git?
-A way to include one Git repository **inside** another as a subfolder, while keeping its own separate history. Useful when your project depends on another repo (like a shared library) that's maintained separately.
-
-### 32. What is the difference between Gitflow and trunk-based development?
-- **Gitflow** — uses multiple long-living branches (`main`, `develop`, `feature/*`, `release/*`, `hotfix/*`). More structured, good for scheduled releases.
-- **Trunk-based development** — everyone works off a single main branch with short-lived feature branches, merging frequently. Favored by teams doing continuous integration/deployment.
-
 ### 33. What happens internally when you run `git commit`?
 Git takes everything in the staging area, creates a new **tree object** representing that snapshot, wraps it in a **commit object** with metadata (author, timestamp, message, and a pointer to the parent commit), and moves the branch pointer (and `HEAD`) to this new commit.
-
-### 34. What's the difference between a fast-forward merge and a three-way merge?
-- **Fast-forward** — happens when the target branch hasn't changed since you branched off; Git just moves the pointer forward, no new commit needed.
-- **Three-way merge** — happens when both branches have diverged (new commits on both sides); Git looks at the common ancestor plus both branch tips to create a new merge commit.
-
-### 35. How do you resolve a detached HEAD state?
-A detached HEAD happens when you check out a specific commit instead of a branch — any new commits you make there aren't attached to a branch and can get lost. To fix it, either create a new branch from that point (`git checkout -b new-branch-name`) to save your work, or just check out an existing branch to go back to normal.
 
 ### 36. What are GitHub Actions?
 GitHub's built-in **automation/CI-CD tool**. You write workflow files (YAML) that automatically run tasks — like testing code, building projects, or deploying — whenever something happens in the repo (e.g., on every push or pull request).
 
-### 37. What is the difference between squash merge, merge commit, and rebase merge on GitHub pull requests?
-- **Merge commit** — keeps all individual commits plus adds one merge commit. Full history preserved.
-- **Squash and merge** — combines all commits from the PR into a single commit on the main branch. Cleaner history, but individual commit detail is lost.
-- **Rebase and merge** — replays each commit from the PR onto the main branch individually, without a merge commit. Keeps a linear history.
-
-### 38. How would you recover a deleted branch?
-If you know the last commit hash of the deleted branch (findable via `git reflog`), you can recreate the branch with:
-```
-git checkout -b recovered-branch <commit-hash>
-```
-
-### 39. What is the difference between `git pull --rebase` and a normal `git pull`?
-- Normal `git pull` merges incoming changes, potentially creating an extra merge commit.
-- `git pull --rebase` replays your local commits on top of the newly fetched commits instead, keeping history linear and avoiding unnecessary merge commits.
-
-### 40. How does Git know a file has changed (efficiently, without comparing every byte)?
-Git doesn't compare full file contents every time. Instead, it uses **SHA-1 hashes** of file content and checks file metadata (like modification time) first as a quick filter. If a file's hash matches what's already stored, Git knows nothing changed — making status checks very fast even in huge repos.
-
 ---
 
-## 💡 Quick Tips for the Interview
-- If asked to explain something, use an **analogy first**, then the technical term — interviewers love clarity.
-- Be ready to explain **why** you'd pick merge vs rebase, or reset vs revert — knowing the trade-offs matters more than memorizing commands.
-- If you don't know something, it's fine to say: "I haven't used that in practice, but based on what I know, it should work like this..." — shows honesty and reasoning ability.
