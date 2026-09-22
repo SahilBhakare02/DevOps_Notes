@@ -135,7 +135,7 @@ Developers can make commits and view history locally without connecting to the r
 
 ---
 
-**"In a centralized version control system, there is a single central repository where the code and history are maintained, and developers depend on that server for most operations. In a distributed version control system like Git, every developer has a complete copy of the repository and its history. This allows developers to commit and work offline and later synchronize their changes with the remote repository."**
+In a centralized version control system, there is a single central repository where the code and history are maintained, and developers depend on that server for most operations. In a distributed version control system like Git, every developer has a complete copy of the repository and its history. This allows developers to commit and work offline and later synchronize their changes with the remote repository.
 ---
 
 ### Introduction to Git?
