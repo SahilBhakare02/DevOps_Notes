@@ -27,8 +27,119 @@ and that advantage is provides DVCS.
 
 # Difference Centralized Vesrion Control System (CVCS) vs Distributed Version Control System (DVCS).
 
+## What is a Version Control System?
+
+A **Version Control System (VCS)** is a tool used to track changes in source code, manage different versions of files, and help multiple developers work on the same project.
+
+There are two major types:
+
+1. **Centralized Version Control System (CVCS)**
+2. **Distributed Version Control System (DVCS)**
+
+---
+
+## 1. Centralized Version Control System (CVCS)
+
+In a **Centralized VCS**, there is **one central server** that stores the main repository and its history.
+
+### Examples
+
+* SVN (Subversion)
+* CVS
+* Perforce
+
+### How it works
+
+```text
+Developer A ──┐
+Developer B ──┼──> Central Server
+Developer C ──┘
+```
+
+Developers connect to the central server to get the latest code, update their files, and commit changes.
+
+### Simple Example
+
+> Think of it like a **single main library**. Everyone has to go to that library to access or update the main collection.
+
+---
+
+## 2. Distributed Version Control System (DVCS)
+
+In a **Distributed VCS**, every developer has a **complete copy of the repository**, including its history.
+
+### Examples
+
+* Git
+* Mercurial
+
+### How it works
+
+```text
+Developer A ──> Local Repository
+Developer B ──> Local Repository
+Developer C ──> Local Repository
+
+                  ↓
+             Remote Repository
+```
+
+Developers can make commits and view history locally without connecting to the remote server for every operation.
+
+### Simple Example
+
+> Think of it like **everyone having their own complete copy of the library**. They can work independently and later share their changes.
+
+---
+
+# Centralized VCS vs Distributed VCS
+
+| Feature                    | Centralized VCS                               | Distributed VCS                             |
+| -------------------------- | --------------------------------------------- | ------------------------------------------- |
+| Repository                 | One central repository                        | Multiple Repository (Local + Remote)        |
+| Examples                   | SVN, CVS, Perforce                            | Git, Mercurial                              |
+| Repository history         | Mainly stored on central server               | Available in each local repository          |
+| Internet                   | Usually required for most operations          | Not required for local operations           |
+| Offline work               | Limited                                       | Easy                                        |
+| Local commits              | Generally not the main model                  | Fully supported                             |
+| Speed                      | Slow                                          | Fast                                        |
+| Branching                  | Usually more centralized                      | Lightweight and easy                        |
+| Failure                    | Central server failure can affect development | Other repository copies contain the history |
+| Collaboration              | Mainly through central server                 | Push/Pull between repositories              |
+| Backup                     | Mainly depends on central repository          | Multiple complete copies provide redundancy |
+
+---
+
+## Simple Diagram
+
+### Centralized VCS
+
+```text
+             Central Server
+                  │
+       ┌──────────┼──────────┐
+       ↓          ↓          ↓
+   Developer A Developer B Developer C
+```
+
+### Distributed VCS
+
+```text
+ Developer A        Developer B        Developer C
+ Local Repo         Local Repo         Local Repo
+      │                  │                  │
+      └──────────────────┼──────────────────┘
+                         ↓
+                  Remote Repository
+```
+
+---
+
+**"In a centralized version control system, there is a single central repository where the code and history are maintained, and developers depend on that server for most operations. In a distributed version control system like Git, every developer has a complete copy of the repository and its history. This allows developers to commit and work offline and later synchronize their changes with the remote repository."**
+---
+
 ### Introduction to Git?
-Git is a **version control system** that enables efficient tracking of changes, branching, and collaboration among developerss. 
+Git is a **Distributed version control system** that enables efficient tracking of changes, branching, and collaboration among developerss. 
 
 It is like a "save history" for your code — every time you save (commit), Git remembers exactly what changed, who changed it, and when. If something breaks, you can go back in time to an older, working version.
 
@@ -68,27 +179,20 @@ Example: git clone https://github.com/user/project.git
 
 cd project
 
-Make changes
-vim Dockerfile
+Make changes: vim Dockerfile
 
-Check changes
-git status
+Check changes: git status
 
-Stage changes
-git add Dockerfile
+Stage changes: git add Dockerfile
 
-Save changes locally
-git commit -m "Updated Dockerfile"
+Save changes locally: git commit -m "Updated Dockerfile"
 
-Send changes to GitHub
-git push origin main
+Send changes to GitHub: git push origin main
 
-If another developer has pushed changes:
-git pull origin main
+If another developer has pushed changes: git pull origin main
 
 Git Lifecycle is the process of managing code using Git. First, we make changes in the working directory. Then we use git add to move the required changes to the staging area. After that, git commit saves those changes in the local repository with a commit ID. Finally, git push sends the commits to a remote repository like GitHub. To get the latest changes from the remote repository, we use git pull. 
 So the basic flow is Working Directory → Staging Area → Local Repository → Remote Repository.
-
 
 ### 2. What is GitHub?
 Git and GitHub are **not the same thing**.
@@ -121,7 +225,10 @@ git revert <commit-hash> = undoes the commited change by creating a new commit.
 git restore <file-name> = restore files
 
 ### 8. What is a branch in Git?
-A branch is like a **parallel version of your project**. The main branch (usually `main` or `master`) holds the stable code. When you want to try something new or build a feature without breaking the main code, you create a separate branch to work in.
+A branch is a **parallel version of project**. The main branch (usually `main` or `master`) holds the stable code. When you want to try something new or build a feature without breaking the main code, you create a separate branch to work in.
+
+git branch <branch-name> = create the branch
+git checkout <branch-name> = switch into branch 
 
 ### 9. What is `git merge`?
 Merging takes the changes from one branch and combines them into another branch. For example, once your feature branch is done and tested, you merge it back into `main`.
@@ -201,4 +308,45 @@ Git takes everything in the staging area, creates a new **tree object** represen
 GitHub's built-in **automation/CI-CD tool**. You write workflow files (YAML) that automatically run tasks — like testing code, building projects, or deploying — whenever something happens in the repo (e.g., on every push or pull request).
 
 ---
+git log = shows commit history 
+git difference = show what has changed 
+git mv = moves or renames a file
+git rm = delete a file from git
+git clean = removes untracked files
+git tag = gives name/label to a commit, usually for releases
+
+# What is other branch that is quite commonly used?
+It's a bug fix or hot fix branch
+
+A hotfix branch is created to quickly fix a critical production issue after a release. The fix is tested and merged into the production/release branch, and the same fix is usually merged into the main/development branch to prevent the bug from coming back in future releases.
+
+Example:
+
+Suppose version v3.0 is released to customers.
+
+After 3 days, a customer reports a critical bug in production.
+
+Usually, we:
+
+1. Create a hotfix branch from the production/release version.
+
+2. Fix the issue in the hotfix branch.
+
+3. Test the fix.
+
+4. Merge the hotfix into the production/release branch.
+
+5. Also merge the same fix into the main/development branch so the bug does not appear in future releases.
+
+6. Deploy the fixed version to production.
+
+# From which branch you usually perform releases? 
+From Release branch
+
+# What is a feature branch?
+some people want to introduced some new feature/changes of your existing functionality i.e., feature branch
+
+# Which branch is always update and up to date? 
+trunk / main branch
+
 
