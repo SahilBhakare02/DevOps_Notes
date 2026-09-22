@@ -115,6 +115,11 @@ It tells you what's currently happening in your repo — which files were change
 - `git push` — sends your local commits up to GitHub (uploading).
 - `git pull` — brings the latest changes from GitHub down to your computer (downloading + merging).
 
+# git revert and git restore
+git revert <commit-hash> = undoes the commited change by creating a new commit.
+
+git restore <file-name> = restore files
+
 ### 8. What is a branch in Git?
 A branch is like a **parallel version of your project**. The main branch (usually `main` or `master`) holds the stable code. When you want to try something new or build a feature without breaking the main code, you create a separate branch to work in.
 
