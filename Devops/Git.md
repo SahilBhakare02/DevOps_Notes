@@ -140,19 +140,24 @@ Forking creates your **own personal copy** of someone else's repository on GitHu
 
 ---
 
-## 🟡 INTERMEDIATE LEVEL
+## INTERMEDIATE
 
 ### 14. What's the difference between `git merge` and `git rebase`?
 Both combine changes from one branch into another, but differently:
 - **Merge** keeps full history and creates a new "merge commit" showing where branches joined. History looks like a tree with branches.
 - **Rebase** takes your commits and replays them on top of another branch, making history look like one straight line — cleaner, but it rewrites commit history.
 
-Simple analogy: Merge is like joining two roads with a roundabout (you can see both paths came together). Rebase is like moving your road so it looks like it was built straight from the other road all along.
+Simple: Merge is like joining two roads with a roundabout (you can see both paths came together). Rebase is like moving your road so it looks like it was built straight from the other road all along.
 
 ### 15. What is a merge conflict, and how do you resolve it?
-A conflict happens when Git can't automatically decide how to combine changes — usually because two people edited the **same line** of the same file differently. To fix it:
+A conflict happens when Git can't automatically decide how to combine changes — usually because two people edited the **same line** of the same file differently. 
+
+To fix it:
+
 1. Git marks the conflicting section in the file with `<<<<<<<`, `=======`, `>>>>>>>`.
+
 2. You manually edit the file to decide what the final version should look like.
+
 3. You `git add` the fixed file and commit.
 
 ### 16. What is `git stash`?
@@ -194,7 +199,7 @@ This removes the last commit but keeps your changes staged, ready to be re-commi
 
 ---
 
-## 🔴 ADVANCED LEVEL
+## ADVANCED Notes
 
 ### 26. What are Git's internal objects (blob, tree, commit)?
 Git stores data as objects, identified by a unique SHA-1 hash:
