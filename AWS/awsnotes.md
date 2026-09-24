@@ -1250,3 +1250,726 @@ Connection draining in AWS is an Elastic Load Balancing (ELB) feature that ensur
 | 502 | Bad Gateway | Load balancer cannot communicate with the backend server. Common causes: application crashed, wrong port, service stopped |
 | 503 | Service Unavailable | No healthy servers available (all EC2 instances unhealthy) |
 | 504 | Gateway Timeout | Backend server is too slow to respond |
+
+<!-- Note: Markdown does not support custom fonts like Times New Roman. To get Times New Roman, open this file in Word/Google Docs and apply the font, or ask for a .docx version. -->
+
+# AWS Notes 
+### Autoscaling, IAM, S3, CLI, CloudWatch, Databases, RDS, Route 53, CloudFront, Lambda & Security Concepts
+
+---
+
+## 1. Autoscaling
+
+### What is Autoscaling?
+Autoscaling automatically adds or removes EC2 instances based on demand to improve availability, performance, and cost efficiency.
+
+- Example: AWS increases servers (1–100) when users (traffic) increase, and can also decrease servers (100–1) when users (traffic) decrease according to requirement.
+
+### Steps to Set Up Autoscaling
+1. Launch an EC2 instance – configure advanced settings (install nginx server)
+2. Create a template
+3. Go to Auto Scaling Group → create Auto Scaling group
+4. Give a name to the Auto Scaling group
+5. Select the template
+6. Select AZs (all)
+7. Change health check grace period (from 300 to 120)
+8. Set desired group capacity (2)
+9. Min scale limit = 1, max scale limit = 4
+10. Select target tracking scaling policy
+11. Set metric type = average CPU utilization
+12. Set target value
+13. Set instance warmup period (default warmup time = 300) = 120
+14. Go through next → next → next
+15. Finally, create the Auto Scaling group
+16. Run stress command on desired instances (2) to increase load:
+    ```
+    sudo apt update && sudo apt install stress -y
+    stress --help
+    stress --cpu 300 --io 4 --vm-bytes 128M --timeout 300s &
+    ```
+
+### Policies of Autoscaling
+
+**1. Dynamic Scaling**
+Dynamic autoscaling policy automatically adjusts the number of EC2 instances based on real-time CloudWatch metrics like CPU utilization, network traffic, or request count. When workload increases, it launches new instances; when workload decreases, it terminates unnecessary instances. Instead of manually adding or removing servers, AWS does it automatically according to the current workload.
+
+Dynamic auto scaling policy has 3 types:
+- **Target Tracking:** AWS automatically maintains a target metric.
+  - Example: Target CPU = 50%. If CPU usage > 50%, AWS adds instances; if CPU usage < 50%, AWS removes instances. Best for most production workloads.
+- **Step Scaling:** AWS scales differently depending on how much the metric exceeds the threshold.
+  - Example: CPU utilization 60–70% → add 1 EC2; 70–85% → add 2 EC2; above 85% → add 4 EC2.
+- **Simple Scaling:** A single action is taken whenever a threshold is crossed.
+  - Example: CPU > 70% → add 1 EC2, and wait for the cooldown period before scaling again.
+
+**2. Scheduled Scaling**
+Scheduled scaling automatically scales resources (EC2) up or down at a predefined date and time.
+- Example: Every weekday, 9:00 AM increases from 2 to 8 instances; 9:00 PM reduces back to 2 instances.
+
+**3. Predictive Scaling**
+AWS analyzes historical usage patterns and launches instances before traffic increases. Predictive scaling uses ML to analyze historical CloudWatch metrics and predicts future traffic. It launches EC2 instances before demand increases.
+- Example: An online shopping site gets heavy traffic every day at 8 PM. AWS learns this pattern and launches extra EC2 instances before 8 PM.
+
+### Types of Autoscaling
+
+**1. Vertical Autoscaling** – increasing resources/power of the same server (increases CPU, RAM, or storage of an existing server)
+- Example: EC2 with 2 vCPU, 4GB RAM upgraded to EC2 with 8 vCPU, 32GB RAM
+- Simple, no architecture changes, easy for small applications
+
+**2. Horizontal Autoscaling** – increases the number of servers (adding more servers to distribute workload and handle increased traffic, instead of making 1 server bigger)
+- Example: Before – 1 EC2; after – 4 EC2
+- High availability, no single point of failure, almost unlimited growth, used by modern cloud applications
+
+> AWS prefers Horizontal Scaling – due to better availability, better fault tolerance, and it works well with Auto Scaling.
+
+### Why Do We Use Autoscaling?
+We use it because when traffic increases suddenly on a server, autoscaling adjusts the number of servers automatically to prevent the website from crashing. It's used for high availability, better performance, and cost saving.
+
+### Warmup Period vs Cooldown Period
+- **Warmup period:** Time given to a new instance to become fully operational before its metrics are considered.
+- **Cooldown period:** The waiting period after a scaling action before another scaling activity can occur — "relax & observe" before taking another scaling action.
+
+---
+
+## 2. IAM – Identity and Access Management
+
+IAM works on the principle of **least privilege** (jitni less permission utna achha / the fewer permissions, the better).
+
+IAM is a service that helps you securely control access to AWS resources. It allows you to manage users, roles, and permissions to define who can access what within your AWS environment.
+
+- **It's a free service:** IAM is offered at no additional cost
+- **It is a global service**
+- A root account is created by default and shouldn't be used or shared
+
+### Features of IAM
+- Centralized control of AWS resources
+- Secure access to AWS services
+- Granular permissions for users and groups
+- Multi-factor authentication (MFA)
+- Integration with third-party identity providers
+- Ability to create users and create groups
+
+### Identity-Based Policy vs Resource-Based Policy
+- **Identity policy** – attached to an IAM user, group, or role. It defines what actions that identity is allowed or denied to perform on AWS resources.
+- **Resource policy** – attached directly to an AWS resource, such as an S3 bucket. It defines which users, roles, or AWS accounts are allowed or denied access to that resource.
+
+| Feature | Identity-Based Policy | Resource-Based Policy |
+|---|---|---|
+| Attached to | IAM user, IAM group, IAM role | AWS resource (e.g. bucket) |
+| Controls | What the user/role can do | Who can access the resource |
+| Permission given to | Identity | Resource |
+| Cross-account access | Difficult without additional setup | Easy to configure |
+| Example | IAM policy | S3 bucket policy, SQS policy, KMS key policy |
+| Principal element | Not required (identity already known) | Required (specifies who can access) |
+
+### IAM User vs IAM Role vs IAM Policy
+- **IAM user** – a permanent user/identity for a person or application with long-term credentials (username, password, access key). *(who you are)*
+- **IAM role** – a temporary identity that provides permissions to AWS services, applications, or users without long-term credentials. *(temporary responsibility)*
+- **IAM policy** – a JSON document that defines what actions are allowed or denied on AWS resources. *(what you are allowed to do)*
+
+| Feature | IAM User | IAM Role | IAM Policy |
+|---|---|---|---|
+| What is it? | A person or application with permanent credentials | A temporary identity with permissions | A document that defines permissions |
+| Used by | Employees, developers, admins | AWS services, applications, temporary users | Attached to users, groups, or roles |
+| Login credentials | Yes (username & password / access keys) | No permanent credentials | No credentials |
+| Access keys | Yes | Temporary credentials only | No |
+| Temporary or permanent | Permanent | Temporary | Not an identity |
+| Can be attached to? | No | No | Users, groups, roles |
+
+### Types of Access Assigning
+1. **Console access** – for web-based AWS Management Console access, requires password setup
+2. **Programmatic access** – for AWS CLI, SDKs, or APIs, provides an Access Key ID and Secret Access Key
+
+---
+
+## 3. S3 – Simple Storage Service
+
+### Is S3 Global or Regional?
+Amazon S3 is a **global service**, but a **bucket is a regional resource**.
+
+Amazon S3 is a global service because it is available across all AWS regions and uses a globally unique bucket namespace. However, every S3 bucket is created in a specific region, and its data is stored in that region unless replication is configured.
+
+**S3 global means:**
+- The Amazon S3 service is available worldwide — you can use S3 in any AWS region
+- There is 1 global S3 namespace for bucket names
+
+**Bucket is regional means:**
+- When you create a bucket, you must choose one AWS region
+- Example: Suppose you create a bucket `sahil-backup`. AWS asks you to choose an AWS region — Mumbai (`ap-south-1`). Now this bucket belongs to the Mumbai region. It will not automatically be created in another region.
+
+**Why is S3 called a global service?**
+Because bucket names are globally unique — no one else in any AWS account or region can create another bucket with the same name.
+
+> If the Mumbai region fails, your bucket still belongs to Mumbai. If you want another copy in Singapore, you must configure Cross-Region Replication (CRR) or copy objects manually. AWS does not automatically move your bucket to another region.
+
+### What is S3?
+S3 is AWS's object storage service — a cloud storage system where you can store files of any type like images, videos, PDFs, backups, and logs.
+
+- **Maximum object size in S3:** 5 TB
+
+### Core Components of S3
+1. **Bucket** – a container/folder. Before storing files, you create a bucket (bucket name should be globally unique).
+2. **Object** – everything stored in S3 is called an object.
+3. **Key** – the unique path of an object; S3 identifies files using keys.
+4. **Versioning** – suppose `resume.pdf` was uploaded today, and tomorrow you upload another `resume.pdf`. Without versioning, the old file is overwritten and lost forever. With versioning (version1, version2, version3), AWS keeps all copies.
+   - Benefits: recover deleted files, rollback changes
+5. **Lifecycle policy** – used for automatic cost saving. Example: store backups → after 30 days move to S3 Standard-IA → after 180 days move to Glacier → after 1 year delete automatically.
+6. **Bucket policy (security rules)** – controls who can access the bucket.
+   - Example: Public website → allow everyone read access; Private bucket → only IAM users
+7. **IAM permissions** – IAM controls who can read, write, delete.
+   - Example: Developers = read only, Admin = full access
+   - Bucket policy controls bucket access, and IAM controls user access
+8. **Encryption** – protects data
+   - **SSE-S3** – AWS manages encryption keys
+   - **SSE-KMS** – uses AWS KMS, more secure, more control, used in companies
+   - Without encryption, data is readable; with encryption, data is unreadable — only authorized users can read it
+
+### Why Companies Use S3
+1. **Highly durable** – 99.999999999% (11 nines — that durable)
+2. **Infinite storage** – no need to buy hard disks (can store 1 GB, 1 TB, 100 TB and more)
+3. **Cheap** – pay only for storage used
+4. **Accessible anywhere** – an internet connection is enough
+
+### Steps to Create a Bucket in S3
+1. Search S3
+2. Click "Create bucket"
+3. Name the bucket (name should be globally unique)
+4. For uploading files, click "Upload"
+5. Add file
+6. Select file from resource and upload
+7. You can open the file or copy the file from S3
+
+### Steps to Host a Static Website on S3
+1. Download a free template from Google browser
+2. Unzip that zip file
+3. Go to AWS console
+4. Search for S3
+5. Click "Create bucket" in S3
+6. Go to that bucket
+7. Click "Upload"
+8. Drag and drop the unzipped files from source to destination
+9. Save
+10. Go to bucket permissions:
+    - Public access = enable
+    - Object ownership = enable
+    - Edit access control list (add "list" and "write" permission for public)
+11. Go to bucket properties → static website hosting = enable
+12. Type file name = `index.html`
+13. Copy the respective URL
+14. Paste it in the browser — you will see the static website on the browser
+
+---
+
+## 4. EBS vs EFS vs S3
+
+| Feature | EBS | EFS | S3 |
+|---|---|---|---|
+| Full form | Elastic Block Storage | Elastic File System | Simple Storage Service |
+| Data stored as | Block format | File format | Object in a bucket |
+| Attached to | EC2 | EC2 | Independent |
+| Multiple EC2 access | Cannot | Can access multiple EC2 | Can access multiple EC2 via API |
+| Can boot OS | Yes | Cannot boot OS | Cannot boot OS |
+| Used in | OS and databases | Shared files | Backups, images, logs |
+| Durability | — | — | 99.999999999% |
+| Looks like | SSD/HDD | Shared folder | Cloud bucket |
+| Shared storage | Cannot share | Can share | Shares via API |
+| Performance | Fastest | Medium | Slower |
+| Backup method | Snapshot | AWS Backup | Versioning |
+| Best for | Database storage | Database storage possible | Not suitable for databases |
+| Scalability | Manual | Automatic | Unlimited |
+| Availability zone | Single AZ | Multi-AZ | Multi-AZ |
+| Cost | High | Medium | Cheapest |
+| Max size | 64 TB | Petabytes | Virtually unlimited |
+| Website hosting | No | No | Yes (static website hosting) |
+
+---
+
+## 5. S3 Storage Classes
+
+There are a total of 8 storage classes discussed here:
+
+**1. S3 Standard (default storage)**
+The default storage class when you upload an object. Designed for files that are accessed frequently. Highest storage cost among commonly used storage classes.
+- Example: Website images, CSS, JavaScript, user profile pictures, videos, documents — accessed every day
+- Features: stored across 3+ AZs, very high durability (11 nines = 99.999999999%), millisecond access, high availability (99.99%)
+
+**2. S3 Intelligent-Tiering**
+AWS automatically moves files between storage tiers based on how frequently they're accessed. You don't need to decide manually.
+- Example: You upload `project.pdf`. Initially users open it every day, so AWS keeps it in the Frequent Access Tier. After 2 months, nobody opens it, so AWS automatically moves it to the Infrequent Access Tier. If people start accessing it again, AWS moves it back automatically.
+- Best for when you don't know future access patterns.
+
+**3. S3 Standard-IA (Infrequent Access)**
+Files are rarely accessed, but when needed they must be available immediately.
+- Example: Monthly database backups, old reports, disaster recovery backups. You may never use June's backup, but if the database crashes, you can restore immediately.
+- Features: stored in 3 AZs, millisecond retrieval
+- Limitations: retrieval charges apply, minimum storage duration = 30 days
+
+**4. S3 One Zone-IA**
+Almost the same as Standard-IA. The difference is it stores files in only 1 AZ.
+- Example: Temporary backups, log data that can be recreated
+- Cheaper because AWS stores only one copy, but riskier — if that AZ fails, your data can be lost. Not suitable for critical business data.
+
+**5. S3 Glacier Instant Retrieval**
+Archive storage with instant retrieval.
+- Example: Hospital records, old legal documents, insurance records — accessed maybe once every 3 months
+- Minimum storage duration = 90 days
+- Features: very cheap storage, instant retrieval
+
+**6. S3 Glacier Flexible Retrieval**
+Very cheap archive storage; retrieval takes minutes to hours. Previously called Amazon Glacier.
+- Example: 5-year-old backups, old audit reports, compliance data
+- Minimum storage duration = 90 days
+
+**7. S3 Glacier Deep Archive**
+The cheapest storage class. Used for rarely accessed data.
+- Example: Tax records, 10-year-old backups, legal records, government archives
+- Retrieval time = several hours; minimum storage duration = 180 days
+
+**8. Reduced Redundancy Storage (RRS)**
+An older storage class that AWS no longer recommends. Standard storage is generally the better choice — you usually won't use RRS in new projects.
+
+---
+
+## 6. AWS CLI – Command Line Interface
+
+AWS Command Line Interface (CLI) is a powerful tool that enables users to interact with AWS services using commands. It helps automate tasks and manage AWS services efficiently.
+
+### Steps to Launch an Instance Using CLI
+1. Go to AWS console and launch an EC2 instance
+2. Connect to it
+3. Install AWS CLI on the instance:
+   ```
+   snap install aws-cli --classic
+   ```
+4. Configure it:
+   ```
+   aws configure
+   ```
+5. Enter Access Key (get both keys from Security Credentials)
+6. Enter Secret Access Key
+7. AWS CLI is now ready to use
+
+**Launch an instance from CLI:**
+```
+aws ec2 run-instances --image-id <instance-ami> --instance-type <instance-type> --key-name <key-pair-name>
+```
+(ensure the AMI ID matches your running instance's AMI ID)
+
+**Terminate an instance using CLI:**
+```
+aws ec2 terminate-instances --instance-ids <instance-id>
+```
+
+### AWS CLI Commands for EC2 Management
+
+| Action | Command |
+|---|---|
+| List EC2 instances | `aws ec2 describe-instances` |
+| Start an EC2 instance | `aws ec2 start-instances --instance-ids <instance-id>` |
+| Stop an EC2 instance | `aws ec2 stop-instances --instance-ids <instance-id>` |
+| Terminate an EC2 instance | `aws ec2 terminate-instances --instance-ids <instance-id>` |
+| Create a key pair | `aws ec2 create-key-pair --key-name <key-name>` |
+| Create a security group | `aws ec2 create-security-group --group-id <group-id> --description "<description>"` |
+| Add inbound rule to security group | `aws ec2 authorize-security-group-ingress --group-id <group-id> --protocol tcp --port 22 --cidr 0.0.0.0/0` |
+
+### AWS CLI Commands for S3 Management
+
+**Create an S3 bucket:**
+```
+aws s3 mb s3://<bucket-name>
+```
+(bucket name should be globally unique)
+
+**Copy a file from instance to S3 bucket:**
+```
+aws s3 cp file-name s3://bucket-name
+```
+
+**Copy a file from S3 bucket to the current instance:**
+```
+aws s3 cp s3://bucket-name/file-name .
+```
+(`.` = current working directory — if the source file is deleted from your instance, you can also download it back from the destination)
+
+> To delete an S3 bucket, you must first empty it.
+
+**Empty a specific file from the bucket:**
+```
+aws s3 rm s3://amzn-s3-demo-bucket/test2.txt
+```
+
+**Delete the bucket (after it's empty):**
+```
+aws s3api delete-bucket --bucket <bucket-name> --region <region-name>
+```
+
+| Action | Command |
+|---|---|
+| List S3 buckets | `aws s3 ls` |
+| List objects in a bucket | `aws s3 ls s3://<bucket-name>/` |
+| Sync local folder to S3 | `aws s3 sync <local-folder-path> s3://<bucket-name>/` |
+| Empty a bucket entirely | `aws s3 rm s3://cbz14buck --recursive` |
+
+### AWS CLI Commands for IAM Management
+
+| Action | Command |
+|---|---|
+| Create user | `aws iam create-user --user-name newuser` |
+| Create group | `aws iam create-group --group-name newgroup` |
+| Add user to group | `aws iam add-user-to-group --user-name newuser --group-name newgroup` |
+| Remove user from group (required before deleting) | `aws iam remove-user-from-group --user-name newuser --group-name newgroup` |
+| Delete user | `aws iam delete-user --user-name newuser` |
+| Delete group | `aws iam delete-group --group-name newgroup` |
+| List IAM users | `aws iam list-users` |
+| Attach policy to a user | `aws iam attach-user-policy --user-name <user-name> --policy-arn <policy-arn>` |
+| Create a custom IAM policy | `aws iam create-policy --policy-name <policy-name> --policy-document file://<policy-document.json>` |
+
+> Note: to delete a user or group, you must remove the user from the group first.
+
+### AWS CLI Commands for VPC Management
+
+| Action | Command |
+|---|---|
+| List VPCs | `aws ec2 describe-vpcs` |
+| Create a VPC | `aws ec2 create-vpc --cidr-block <CIDR-block>` |
+| Create subnet | `aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block <CIDR-block>` |
+| Create an internet gateway | `aws ec2 create-internet-gateway` |
+| Attach internet gateway to VPC | `aws ec2 attach-internet-gateway --vpc-id <vpc-id> --internet-gateway-id <igw-id>` |
+| Create a route table | `aws ec2 create-route-table --vpc-id <vpc-id>` |
+| Add route to route table | `aws ec2 create-route --route-table-id <route-table-id> --destination-cidr-block 0.0.0.0/0 --gateway-id <igw-id>` |
+| Associate route table with subnet | `aws ec2 associate-route-table --subnet-id <subnet-id> --route-table-id <route-table-id>` |
+
+---
+
+## 7. Amazon CloudWatch
+
+Amazon CloudWatch is one of the most important AWS services for cloud and DevOps engineers. Almost every company uses CloudWatch because if you don't monitor your server, you won't know when something goes wrong.
+
+Amazon CloudWatch is AWS's monitoring service that collects metrics and logs, creates alarms based on conditions, displays dashboards, and automatically triggers actions like notifications or autoscaling to keep applications healthy.
+
+**Real-life example:** In a hospital, each patient's heart rate, blood pressure, temperature, and oxygen level are continuously monitored by doctors. If heart rate exceeds 150, the monitor immediately gives an alarm. CloudWatch works exactly the same way.
+
+**AWS example:** Suppose you have an EC2 instance — CloudWatch monitors CPU usage, RAM, disk usage, network traffic, disk read/write, and status checks. If CPU becomes 95%, CloudWatch can send an alert.
+
+### Why Do We Need CloudWatch?
+Suppose your website suddenly gets 1 million users and CPU becomes 100%. Without CloudWatch, the server crashes and nobody knows why. But with CloudWatch: CPU 95% → CloudWatch Alarm → Email → Autoscaling → new EC2 launches → website continues working.
+
+### What Does CloudWatch Monitor?
+
+| Service | Monitored Metrics |
+|---|---|
+| EC2 | CPU utilization, network in/out, disk read/write, status check |
+| RDS | CPU, database connections, storage, free memory |
+| Load Balancer | Healthy targets, request count, latency |
+| Lambda | Invocations, duration, errors |
+| S3 | Bucket size, object count |
+
+### Components of CloudWatch (5 Important Components)
+1. **Metrics** – numerical values collected over time (e.g. CPU utilization 40%, 45%, 60%, 75%)
+2. **Logs** – text messages
+3. **Alarms** – watch a metric and trigger when a condition is met
+4. **Dashboards** – show graphs
+5. **Events (EventBridge)** – CloudWatch/EventBridge detects AWS events
+
+---
+
+## 8. Database Basics
+
+### Why Do We Need a Database?
+Imagine you own a school and have information about students. Without a database, you might store everything in an Excel file. But with 50,000 students, 100 teachers, and 500 people updating data at the same time, Excel becomes slow and difficult to manage — so we use a database.
+
+A database stores data in an organized way so it can be searched, updated, and managed efficiently.
+
+### What is DBMS?
+Database Management System (DBMS) is a software used to store, retrieve, and manage data in structured manner. DBMS acts as a intermediary/manager between the application and the database.
+
+`Application → DBMS → Database` (DBMS is the middleware between application and database)
+
+- Example: Suppose your application asks, "show all students." The DBMS searches the database and returns the data. You never directly access the database files.
+- **Real-life example:** In a library, books are stored in racks. You don't search every rack yourself — the librarian helps you find the correct book. Here, Library = database, and Librarian = DBMS.
+
+### Functions of DBMS
+1. **Store data** – students, address, marks, attendance
+2. **Retrieve data** – find student roll no. 45 instantly
+3. **Update data** – student changes address, DBMS updates it
+4. **Delete data** – student leaves college, delete the record
+5. **Security** – only authorized people can access data
+6. **Backup** – if the server crashes, DBMS restores the data from backup
+
+### Types of DBMS
+1. **Relational Database (RDBMS)** – stores data in tables. It has relationships (e.g. teacher teaches students) hence called relational database.
+   - Examples: MySQL, MariaDB, PostgreSQL, Oracle
+2. **NoSQL Database** – doesn't require tables; stores JSON, documents, key-value pairs.
+   - Example: MongoDB — useful for social media, chat applications
+3. **Hierarchical DBMS** -  Organizes data in a tree-like structure 
+(e.g., IBM IMS).
+4. **Network DBMS** -  Uses graph-based structures for relationships (e.g., IDS, IDMS).
+
+### DBMS vs File System
+
+| DBMS | File System |
+|---|---|
+| Fast search | Slow search |
+| More secure | Less secure |
+| Automatic backup | Manual backup |
+| Less duplication | Data duplication |
+| Structured – organized tables | Flat files |
+| Querying uses SQL | Manual search |
+
+# Structured Query Language (SQL)
+
+
+### What is MariaDB?
+MariaDB is an open-source Relational Database Management System (RDBMS). that is a fork of MySQL. it is almost fully compatible with MySQL.
+
+`MySQL → improved version → MariaDB`
+
+**Advantages:** free, faster, more secure, open source
+
+**Key features of MariaDB:**
+- Open-source and community-driven – no licensing fees
+- Performance improvements – faster execution of complex queries
+- Storage engines – supports InnoDB, MyISAM, Aria, and more
+- Security enhancements – stronger authentication mechanisms
+
+installing MariaDB: sudo apt install mariadb-server -y
+
+Configuring MariaDB: 
+Start MariaDB Service:
+
+sudo systemctl start mariadb
+
+sudo systemctl enable mariadb
+
+Secure Installation:
+sudo mysql_secure_installation
+
+Connecting to MariaDB: 
+mysql -u root -p
+
+---
+
+## 9. Amazon RDS – Relational Database Service
+
+Amazon Relational Database Service (RDS) is a managed database solution provided by AWS that simplifies the setup, operation, and scaling of relational databases in the cloud. It supports various database engines, including MySQL, PostgreSQL, MariaDB, Oracle, and Microsoft SQL Server.
+
+Suppose you install MariaDB on EC2 — you become responsible for installation, updates, backup, recovery, scaling, and monitoring, everything. But Amazon RDS manages it automatically.
+
+### Key Features of RDS
+- **Automated management:** AWS handles backup, patching, and monitoring
+- **Scalability:** storage and compute capacity can be adjusted dynamically
+- **High availability:** Multi-AZ deployments ensure minimal downtime
+- **Security:** integration with IAM, encryption, and VPC for secure access
+- **Read replicas:** improves performance for read-heavy applications
+- **Performance Insights:** analyzes database activity
+
+### RDS Deployment Options
+- **Single-AZ deployment:** cost-effective but has downtime during maintenance
+- **Multi-AZ deployment:** ensures high availability with automatic failover
+- **Read replicas:** used for scaling read-heavy workloads
+- **Aurora RDS:** AWS's cloud-native relational database with higher performance
+
+### RDS Pricing Models
+- **On-demand pricing:** pay per hour with no long-term commitments
+- **Reserved instances:** lower cost for long-term commitments
+- **Serverless RDS:** scales automatically based on demand
+
+### Advantages of RDS
+- Ease of management
+- High availability and disaster recovery
+- Security and compliance
+- Performance optimization
+
+### Why Do We Use RDS?
+Without RDS, you install and manage everything yourself. With RDS, AWS automatically creates the database, takes backups, applies patches, monitors health, and replaces failed hardware.
+
+---
+
+## 10. Amazon Route 53
+
+Amazon Route 53 is a highly available and scalable DNS (Domain Name System) web service that translates domain names into IP addresses and intelligently routes users to AWS resources.
+
+### Why Do We Need Route 53?
+When we launch an EC2 instance, AWS gives it a public IP like `12.13.14.16`. People can't remember this, so they prefer names like `www.example.com` — these are called domain names. Someone has to convert `www.example.com` into an IP address (`12.13.14.16`) — this is the job of DNS. AWS provides its own DNS service called Route 53.
+
+**Real-life example:** We can't remember mobile numbers, so we save them under people's names, like Rahul – 1234567890 (our phone converts "Rahul" back to 1234567890). Similarly, Route 53 converts `google.com` → `142.250.**.**`
+
+### Why is it Called "Route 53"?
+DNS works on port 53 (TCP and UDP). AWS named the service Route 53 because it routes DNS traffic.
+
+### How Amazon Route 53 Routes Traffic for Your Domain (Explanation)
+
+1. User Types Website in the browser: 
+eg. www.example.com, but computer doesn't know www.example.com
+so it asks someone to translate.
+
+2. Browser asks DNS Resolver:
+The request goes to DNS resolver usually Jio, Airtel, BSNL, your Office, Google DNS (8.8.8.8)
+
+3. DNS resolver asks to Root Server:
+The DNS resolver also doesn't know where the www.example.com it just know where ask to next.
+so it's asks to the Root Server (where is www.example.com)
+Root Server replies (i dont know the website, i know who manages .com domains)
+
+4. Resolver Asks .com TLD Server:
+Now the resolver asks .com name server (who manages example.com)
+TLD replies with multiple Route Servers (there are several Route 53 Name Servers for your Domain)
+TLD doesn't know actual IP address, but these multiple Route 53 servers do.
+
+5. DNS Resolver caches These Servers
+DNS Resolver Saves these multiple Route 53 Servers 
+because when next time user types exaple.com it will immendially find the ip for domain.
+
+6. Resolver Contacts Route 53: 
+what is the IP of www.exaple.com
+route 53 looks inside hosted zone and replies with actual IP address (1.2.3.4) for www.exaple.com 
+And send this IP back to your Browser
+
+7. Browser contacts Web server:
+Now browser directly goes to IP address 
+browser says to web server, please send me this webpage 
+
+8. Finallly Website Opens:
+Webpage open having HTML, CSS, JavaScript, Images
+
+# Flow
+User
+ │
+ │ www.example.com
+ ▼
+DNS Resolver
+ │
+ ▼
+Root Server
+ │
+ ▼
+.com Server
+ │
+ ▼
+Route53
+ │
+ │ Returns IP
+ ▼
+192.0.2.44
+ │
+ ▼
+Web Server (EC2/ALB/S3)
+ │
+ ▼
+Website Opens
+
+Route 53 Sends 
+
+### Components of Route 53 (5 Important Things)
+1. **Domain name** – e.g. `amazon.com`, `google.com`, `mysite.in`
+2. **IP address** – e.g. `12.12.12.12` (computers understand this)
+3. **Hosted zone** – a container that stores DNS records for a domain. Think of it as a folder that contains all the DNS records for your domain.
+4. **DNS records** – tell Route 53 where a domain should point:
+   - **A record** – most common; maps a domain to an IPv4 address
+   - **AAAA record** – maps a domain to an IPv6 address
+   - **CNAME (Canonical Name) record** – maps a domain name to another domain name, instead of directly to an IP
+   - **MX (Mail Exchange) record** – used for email (Google Workspace, Microsoft 365)
+   - **TXT record** – stores verification information; used for SSL verification, domain verification, SPF, DKIM
+   - **PTR (Pointer) record** – maps an IP address back to a domain name; mainly used for reverse DNS lookups and email server verification. It performs the opposite of an A record:
+     - A record: domain name → IP address
+     - PTR record: IP address → domain name
+
+### Route 53 Routing Policies
+1. **Simple routing** – one domain → one server (used for small websites)
+2. **Weighted routing** – traffic divided according to percentage (e.g. 80% → Server A, 20% → Server B)
+3. **Latency routing** – Route 53 sends users to the AWS region with the lowest network delay (e.g. India user → Mumbai, Europe user → Frankfurt)
+4. **Geolocation routing** – routes traffic based on the user's country (e.g. India → Indian website, USA → US website)
+5. **Geoproximity routing** – routes traffic based on the geographic distance between users and AWS resources; traffic can also be shifted using a bias setting
+6. **Failover routing** – if the primary server fails, Route 53 automatically sends traffic to a backup server (Primary → fails → Secondary)
+7. **Multivalue answer routing** – returns multiple healthy IP addresses (improves availability)
+
+### Advantages of Route 53
+Managed DNS, very fast, highly available, supports health checks, supports traffic routing, and works with all AWS services.
+
+---
+
+## 11. Amazon CloudFront
+
+AWS CloudFront is a global Content Delivery Network (CDN) service that securely delivers data, videos, applications, and APIs to users with low latency and high transfer speed. It works by caching content at edge locations worldwide.
+
+### Benefits of CloudFront
+- **Reduced latency:** serves content from the nearest edge location to the user
+- **Improved security:** integrates with AWS Shield, AWS WAF, and HTTPS encryption
+- **Cost optimization:** reduced data transfer costs with caching mechanisms
+- **Scalability:** handles traffic spikes efficiently without additional infrastructure
+
+### Steps to Host a Website on CloudFront via S3
+1. Search for a free CSS template on Google
+2. Download it and extract it
+3. Go to AWS console
+4. Search for S3
+5. Create bucket
+6. Upload files (free template)
+7. Manage permissions and properties
+8. Copy the DNS and paste it in the browser — you can see the website (but this is not the complete setup)
+9. Now search for CloudFront
+10. Create distribution
+11. Type the name of the distribution
+12. Select origin type
+13. Browse origin
+14. Origin path (optional)
+15. Use customize origin settings (only)
+16. Use customize cache settings (HTTP and HTTPS)
+17. Security – select "do not enable security protection"
+18. Wait for deployment
+19. Once deployed, copy the domain name and paste it in the browser — you will see the website
+
+### Host a Static Website on Load Balancer for CloudFront
+
+**Steps to host a website on a Load Balancer:**
+1. Go to AWS console
+2. Launch an EC2 instance
+3. Download the web server (nginx/apache2)
+4. Download the website (`wget web-link`)
+5. Create a target group
+6. Create a load balancer
+7. Follow the same procedure as with S3, just change the origin from S3 to Elastic Load Balancer
+
+---
+
+## 12. AWS Lambda
+
+AWS Lambda is a serverless compute service that automatically runs code in response to events and manages the underlying compute resources. With Lambda, you can run code for virtually any application or backend service without provisioning or managing servers.
+
+### Features of AWS Lambda
+- **Event-driven execution:** triggers from AWS services such as S3, DynamoDB, API Gateway, and more
+- **Auto-scaling:** handles thousands of requests per second automatically
+- **Pay-per-use:** billed only for execution time and resources consumed
+- **Supports multiple languages:** Python, Node.js, Java, Go, Ruby, and more
+- **Integrates with AWS services:** works seamlessly with S3, DynamoDB, SNS, CloudWatch, etc.
+
+---
+
+## 13. Encryption vs Hashing
+
+### Encryption
+We can lock (encrypt) data with an encryption key and unlock (decrypt) it again using a password (decryption key). This means the original data can be recovered with the right key. Used when data must be read again later.
+- Example: HTTPS traffic between a client and a browser
+
+### Hashing
+The data is converted into a hash value, and it cannot be read again — there is no key and no reverse function. The original data can never be recovered from the hash. Used for saving passwords: the server does not store the actual password. The entered password's hash value is compared with the saved hash value while logging in.
+
+---
+
+## 14. Authentication vs Authorization
+
+### Authentication
+Authentication verifies **who you are** — like when you log into a website or application via your username and password, fingerprint scanner, etc. The system verifies whether you are a previous/registered user — are you the owner of this account. It's the first step of security. It **confirms your identity**.
+
+### Authorization
+Authorization checks **which permissions/access you have** — like after logging into a website or application, the system checks which permissions you have: read, write, execute, download packages, etc. The system checks whether you have administrative access, i.e. complete access to read, write, and execute files and folders. In an organization, not all users have complete access to read, write, and execute files.
+
+---
+
+## 15. API Basics
+
+An API (Application Programming Interface) is a way for two applications or systems to communicate with each other — it lets one program request data or a service from another, without needing to know how that other program works internally.
+
+- **REST API** – the most common style of API; uses standard HTTP methods (GET, POST, PUT, DELETE) to work with resources, typically exchanging data in JSON format
+- **GraphQL** – a query language for APIs where the client asks for exactly the data it needs in a single request, instead of relying on multiple fixed endpoints like REST
+- **gRPC** – a high-performance API framework built by Google, commonly used for fast communication between backend services (microservices)
+- **Proxy** – a server that sits between a client and another server, forwarding requests on the client's behalf (often used for security, caching, or load distribution)
